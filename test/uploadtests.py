@@ -1,44 +1,34 @@
-import os.path
-import unittest
+import os
+import sys
+
+# add all eggs to path to support command line use
+if not any(['gsconfig' in p for p in sys.path]):
+    dn = os.path.dirname
+    for f in os.listdir(dn(dn(os.path.abspath(__file__)))):
+        if '.egg' in f:
+            sys.path.append(f)
+
+from geoserver import catalog
+import gisdata
 from gsimporter import Client
 from gsimporter import NotFound
 from gsimporter import BadRequest
 from gsimporter import _util
-import os
+from owslib import wms
 from pprint import pprint
+import psycopg2
 import shutil
 import socket
-import sys
 import tempfile
 import time
 import traceback
+import unittest
 
-# Preflight dependency checks
-try:
-    import gisdata
-except ImportError:
-    print 'please install gisdata==0.5.4 for use in testing'
-    sys.exit(1)
-try:
-    from geoserver import catalog
-except ImportError:
-    print 'please install gsconfig==0.6.3 for use in testing'
-    sys.exit(1)
-try:
-    import psycopg2
-except ImportError:
-    print 'please install psycopg2 for use in testing'
-    sys.exit(1)
-try:
-    from owslib import wms
-except ImportError:
-    print 'please install OWSLib for use in testing'
-    sys.exit(1)
 
 # Setup config
-hasflag = lambda f: f in sys.argv and sys.argv.remove(f)
+hasflag = lambda f: f in sys.argv and (sys.argv.remove(f) or True)
 GEOSERVER_BASE_URL = os.getenv('GEOSERVER_BASE_URL', 'http://localhost:8080')
-GEOSERVER_BASE_URL = '%s/geoserver/rest' % GEOSERVER_BASE_URL
+GEOSERVER_REST_URL = '%s/geoserver/rest' % GEOSERVER_BASE_URL
 WORKSPACE = 'importer'
 WORKSPACE2 = 'importer2'
 SKIP_TEARDOWN = hasflag('--skip-teardown')
@@ -51,10 +41,9 @@ DB_CONFIG = dict(
     DB_DATASTORE_PORT = '5432',
     DB_DATASTORE_TYPE = 'postgis',
 )
-# if any keys are defined in the environ, update the defauls
 DB_CONFIG.update([ (k,os.getenv(k)) for k in DB_CONFIG if k in os.environ])
-# make ready for use in globals
-globals().update(DB_CONFIG)
+# make this global
+DB_DATASTORE_NAME = DB_CONFIG['DB_DATASTORE_NAME']
 client = None
 gscat = None
 
@@ -106,9 +95,8 @@ def bad_file(name):
 
 
 def get_wms(name):
-    wkspace, layer = name.split(':')
-    url = '%s/geoserver/%s/%s/wms' % (GEOSERVER_BASE_URL, wkspace, layer)
-    return wms.WebMapService(url)
+    url = '%s/geoserver/wms' % GEOSERVER_BASE_URL
+    return wms.WebMapService(url)[name]
 
 
 # Test suites
@@ -316,7 +304,6 @@ class SingleImportTests(unittest.TestCase):
         finally:
             os.unlink(zip_file)
         wms = get_wms(layer_name)
-        print wms.items()
 
 
 class ErrorTests(unittest.TestCase):
@@ -343,8 +330,8 @@ print 'using GEOSERVER_BASE_URL=%s' % GEOSERVER_BASE_URL
 
 # Preflight connection testing
 print 'testing access...',
-client = Client(GEOSERVER_BASE_URL)
-gscat = catalog.Catalog(GEOSERVER_BASE_URL)
+client = Client(GEOSERVER_REST_URL)
+gscat = catalog.Catalog(GEOSERVER_REST_URL)
 try:
     sessions = client.get_sessions()
     print 'successfully listed imports...',
@@ -425,4 +412,5 @@ print 'done'
 print
 
 
-unittest.main()
+if __name__ == '__main__':
+    unittest.main()
