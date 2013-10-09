@@ -8,6 +8,8 @@ if not any(['gsconfig' in p for p in sys.path]):
         if '.egg' in f:
             sys.path.append(f)
 
+import csv
+import contextlib
 from geoserver import catalog
 import gisdata
 from gsimporter import Client
@@ -23,7 +25,6 @@ import tempfile
 import time
 import traceback
 import unittest
-
 
 # Setup config
 hasflag = lambda f: f in sys.argv and (sys.argv.remove(f) or True)
@@ -97,6 +98,16 @@ def bad_file(name):
 def get_wms(name):
     url = '%s/geoserver/wms' % GEOSERVER_BASE_URL
     return wms.WebMapService(url)[name]
+
+
+@contextlib.contextmanager
+def csv_file(data):
+    _, fname = tempfile.mkstemp(suffix='.csv')
+    with open(fname, 'wb') as fp:
+        writer = csv.writer(fp)
+        writer.writerows(data)
+    yield fname
+    os.unlink(fname)
 
 
 # Test suites
@@ -173,9 +184,11 @@ class SingleImportTests(unittest.TestCase):
 
     def setUp(self):
         self.drop_table = None
+        self.expected_layer = None
 
     def tearDown(self):
         if SKIP_TEARDOWN: return
+        if not self.expected_layer: return
         lyr = gscat.get_layer(self.expected_layer)
         lyr and gscat.delete(lyr)
         gscat.delete(lyr.resource)
@@ -184,8 +197,9 @@ class SingleImportTests(unittest.TestCase):
         
     def run_single_upload(self, vector=None, raster=None, target_store=None,
             delete_existing=True, async=False, mosaic=False, update_mode=None,
-            change_layer_name=None,
-            expect_session_state='COMPLETE', expected_layer=None):
+            change_layer_name=None, expected_srs='', target_srs=None,
+            expect_session_state='COMPLETE', expected_layer=None,
+            transforms=None, expected_atts=None):
 
         assert vector or raster
         file_func = raster_file if raster else vector_file
@@ -209,6 +223,16 @@ class SingleImportTests(unittest.TestCase):
         self.assertEqual(1, len(session.tasks))
         self.assertEqual('PENDING', session.state)
         self.assertEqual(expected_layer, session.tasks[0].get_target_layer_name())
+        if expected_srs is None:
+            self.assertEqual('NO_CRS', session.tasks[0].state)
+        elif expected_srs:
+            self.assertEqual(expected_srs, session.tasks[0].srs)
+
+        if target_srs is not None:
+            session.tasks[0].layer.set_srs(target_srs)
+
+        if transforms:
+            session.tasks[0].set_transforms(transforms)
 
         if change_layer_name:
             session.tasks[0].layer.set_target_layer_name(change_layer_name)
@@ -226,7 +250,7 @@ class SingleImportTests(unittest.TestCase):
         if update_mode:
             session.tasks[0].set_update_mode(update_mode)
 
-        # run import and verify
+        # run import and poll if required
         session.commit(async=False)
         if async:
             while True:
@@ -235,11 +259,17 @@ class SingleImportTests(unittest.TestCase):
                 if progress['state'] == 'COMPLETE': break
                 if progress['state'] != 'RUNNING':
                     self.fail('expected async progress state to be RUNNING')
+
+        # verify post import
         session = session.reload()
         self.assertEqual(expect_session_state, session.state)
         lyr = gscat.get_layer(expected_layer)
         self.assertTrue(lyr is not None,
                         msg='Expected to find layer "%s" in the catalog' % expected_layer)
+        if expected_atts:
+            #@todo cannot check type via gsconfig, only names
+            names = set(lyr.resource.attributes)
+            self.assertTrue(names.issuperset(expected_atts.keys()))
         return expected_layer
 
     def test_single_shapefile_upload(self):
@@ -304,6 +334,28 @@ class SingleImportTests(unittest.TestCase):
         finally:
             os.unlink(zip_file)
         wms = get_wms(layer_name)
+
+    def test_csv(self):
+        data = (
+            ['lat','lon','date'],
+            [1    ,5    ,'2001'],
+            [2    ,5    ,'2002'],
+            [3    ,5    ,'2003'],
+            [4    ,5    ,'2004'],
+            [5    ,5    ,'2005'],
+        )
+        transforms = [{
+            'type': 'AttributesToPointGeometryTransform',
+            'latField': 'lat',
+            'lngField': 'lon',
+        }]
+        atts = { 'location':'Point', 'date':'Integer'}
+        with csv_file(data) as f:
+            self.run_single_upload(vector=f, expected_srs=None,
+                                   target_srs='EPSG:4326',
+                                   target_store=DB_DATASTORE_NAME,
+                                   transforms=transforms,
+                                   expected_atts=atts)
 
 
 class ErrorTests(unittest.TestCase):

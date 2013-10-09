@@ -165,15 +165,15 @@ class Target(_UploadBase):
         _binding('enabled'),
     )
 
-    # this allows compatibility with the gsconfig datastore object
-    resource_type = "featureType"
-
     def _bind_json(self, json):
         self.href = json.get('href')
-        repr = [ json[k] for k in ('dataStore', 'coverageStore', 'store') if k in json]
-        if len(repr) != 1:
-            self._binding_failed('invalid store entry: %s', json.keys())
-        super(Target, self)._bind_json(repr[0])
+        store_type = [ k for k in ('dataStore', 'coverageStore', 'store') if k in json]
+        if len(store_type) != 1:
+            self.binding_failed('invalid store entry: %s', json.keys())
+        self.store_type = store_type[0]
+        repr = json[self.store_type]
+        super(Target, self)._bind_json(repr)
+        
 
     def _bind_custom_json(self, json):
         workspace = json.get('workspace', None)
@@ -200,7 +200,7 @@ class BBox(_UploadBase):
         _binding('miny'),
         _binding('maxx'),
         _binding('maxy'),
-        _binding('crs'),
+        _binding('crs', expected=False),
     )
 
 
@@ -218,12 +218,17 @@ class Layer(_UploadBase):
         _binding('href'),
         _binding('originalName'),
         _binding('nativeName'),
-        _binding('srs'),
+        _binding('srs', expected=False),
+        _binding('attributes', binding=Attribute, expected=False),
         _binding('bbox', binding=BBox),
     )
 
     def set_target_layer_name(self, name):
         data = { 'layer' : { 'name' : name }}
+        self._client().put_json(self.href, json.dumps(data))
+
+    def set_srs(self, srs):
+        data = { 'layer' : { 'srs' : srs }}
         self._client().put_json(self.href, json.dumps(data))
 
 
@@ -286,9 +291,12 @@ class Task(_UploadBase):
         if resp['status'] != '204':
             raise Exception('expected 204 response code, got %s' % resp['status'],content)
 
-    def set_transforms(self, transforms):
+    def set_transforms(self, transforms, save=True):
         """Set the transforms of this Item. transforms is a list of dicts"""
         self.transforms = list(transforms)
+        save and self.save_transforms()
+
+    def save_transforms(self):
         chain = {
             "type": self.transform_type,
             "transforms": self.transforms
@@ -296,17 +304,17 @@ class Task(_UploadBase):
         data = { 'task' : { 'transformChain' : chain}}
         self._client().put_json(self.href, json.dumps(data))
 
-    def add_transforms(self, transforms):
+    def add_transforms(self, transforms, save=True):
         self.transforms.extend(transforms)
-        self.set_transforms(self.transforms)
+        save and self.save_transforms()
 
-    def remove_transforms(self, transforms, by_field=None):
+    def remove_transforms(self, transforms, by_field=None, save=True):
         '''remove transforms by equality or list of field values'''
         if by_field:
             self.transforms = [ t for t in self.transforms if t[by_field] not in transforms ]
         else:
             self.transforms = [ t for t in self.transforms if t not in transforms ]
-        self.set_transforms(self.transforms)
+        save and self.save_transforms()
 
     def get_progress(self):
         """Get a json object representing progress of this item"""
