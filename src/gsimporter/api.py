@@ -216,8 +216,8 @@ class Layer(_UploadBase):
     _bindings = (
         _binding('name'),
         _binding('href'),
-        _binding('originalName'),
-        _binding('nativeName'),
+        _binding('originalName', expected=False),
+        _binding('nativeName', expected=False),
         _binding('srs', expected=False),
         _binding('attributes', binding=Attribute, expected=False),
         _binding('bbox', binding=BBox),
