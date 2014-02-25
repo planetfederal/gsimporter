@@ -173,24 +173,25 @@ class Target(_UploadBase):
         self.store_type = store_type[0]
         repr = json[self.store_type]
         super(Target, self)._bind_json(repr)
-        
 
     def _bind_custom_json(self, json):
         workspace = json.get('workspace', None)
         if workspace:
             self.workspace_name = workspace['name']
 
-    def change_datastore(self, store_name, workspace=None):
+    def change_datastore(self, store_name=None, workspace=None):
         '''Immediately change the target to the specified datastore. The workspace
         must exist prior to setting as the target.
 
-        :param store_name: An existing datastore name
+        :param store_name: An optional existing datastore name
         :param workspace: An optional workspace to use for referencing the store
         '''
-        dataStore = { 'name' : store_name }
+        dataStore = {}
+        if store_name:
+            dataStore['name'] = store_name
         if workspace:
             dataStore['workspace'] = { 'name' : str(workspace) }
-        target_rep = { 'dataStore' : dataStore }
+        target_rep = { self.store_type : dataStore }
         self._client().put_json(self.href,json.dumps(target_rep))
 
 
@@ -258,18 +259,8 @@ class Task(_UploadBase):
         return '%s:%s' % (self.target.workspace_name, self.layer.name)
 
     # Mutators
-    def set_target(self, store_name, workspace):
-        data = { 'task' : {
-            'target' : {
-                'dataStore' : {
-                    'name' : store_name,
-                    'workspace' : {
-                        'name' : workspace
-                    }
-                }
-            }
-        }}
-        self._client().put_json(self.href, json.dumps(data))
+    def set_target(self, store_name=None, workspace=None):
+        self.target.change_datastore(store_name, workspace)
 
     def set_update_mode(self,update_mode):
         data = { 'task' : {

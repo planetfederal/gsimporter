@@ -198,7 +198,7 @@ class SingleImportTests(unittest.TestCase):
     def run_single_upload(self, vector=None, raster=None, target_store=None,
             delete_existing=True, async=False, mosaic=False, update_mode=None,
             change_layer_name=None, expected_srs='', target_srs=None,
-            expect_session_state='COMPLETE', expected_layer=None,
+            expect_session_state='COMPLETE', expected_layer=None, workspace=None,
             transforms=None, expected_atts=None):
 
         assert vector or raster
@@ -208,7 +208,6 @@ class SingleImportTests(unittest.TestCase):
         file_name = file_func(file_name)
         if expected_layer is None:
             expected_layer = '%s:%s' % (WORKSPACE, layer_name)
-        self.expected_layer = expected_layer
 
         # pre-flight cleanup
         # if update_mode or otherwise specified, don't do any deleting
@@ -240,18 +239,23 @@ class SingleImportTests(unittest.TestCase):
             self.assertEqual(change_layer_name, session.tasks[0].layer.name)
             self.expected_layer = expected_layer = change_layer_name
 
-        if target_store:
-            session.tasks[0].target.change_datastore(target_store)
+        if target_store or workspace:
+            session.tasks[0].target.change_datastore(target_store, workspace)
             session = session.reload()
-            self.assertEqual(session.tasks[0].target.name, target_store)
+            if target_store:
+                self.assertEqual(session.tasks[0].target.name, target_store)
+            if workspace:
+                self.assertEqual(session.tasks[0].target.workspace_name, workspace)
             if vector:
                 self.drop_table = layer_name
+            expected_layer = '%s:%s' % (workspace or WORKSPACE, layer_name)
 
         if update_mode:
             session.tasks[0].set_update_mode(update_mode)
 
         # run import and poll if required
         session.commit(async=False)
+        self.expected_layer = expected_layer
         if async:
             while True:
                 time.sleep(.1)
@@ -275,8 +279,16 @@ class SingleImportTests(unittest.TestCase):
     def test_single_shapefile_upload(self):
         self.run_single_upload(vector='san_andres_y_providencia_poi.shp')
 
+    def test_single_shapefile_change_workspace(self):
+        self.run_single_upload(vector='san_andres_y_providencia_poi.shp',
+            workspace=WORKSPACE2)
+
     def test_single_raster_upload(self):
         self.run_single_upload(raster='relief_san_andres.tif')
+
+    def test_single_raster_upload_change_workspace(self):
+        self.run_single_upload(raster='relief_san_andres.tif',
+            workspace=WORKSPACE2)
 
     def test_upload_to_db(self):
         self.run_single_upload(vector='san_andres_y_providencia_poi.shp',
