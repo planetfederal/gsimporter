@@ -186,7 +186,7 @@ class Target(_UploadBase):
         :param store_name: An optional existing datastore name
         :param workspace: An optional workspace to use for referencing the store
         '''
-        dataStore = {}
+        dataStore = { 'enabled' : True } # workaround for importer bug
         if store_name:
             dataStore['name'] = store_name
         if workspace:
