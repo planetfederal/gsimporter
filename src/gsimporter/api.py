@@ -240,7 +240,7 @@ class Task(_UploadBase):
         _binding('href'),
         _binding('state'),
         _binding('progress'),
-        _binding('updateMode'),
+        _binding('updateMode', expected=False), # workaround for older versions
         _binding('data', binding=Data),
         _binding('target', binding=Target),
         # a missing layer probably indicates an undetected format
