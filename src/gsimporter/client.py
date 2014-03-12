@@ -57,7 +57,7 @@ class Client(object):
         if import_id: assert session.id >= import_id
         return session
         
-    def upload(self, fpath, use_url=False, import_id=None, mosaic=False):
+    def upload(self, fpath, use_url=False, import_id=None, mosaic=False, **opts):
         """Try a complete import - create a session and upload the provided file.
         fpath can be a path to a zip file or the 'main' file if a shapefile or
         a tiff.
@@ -71,9 +71,9 @@ class Client(object):
         if fpath.lower().endswith(".shp"):
             files = _util.shp_files(fpath)
 
-        return self.upload_files(files, use_url, import_id, mosaic)
+        return self.upload_files(files, use_url, import_id, mosaic, **opts)
 
-    def upload_files(self, files, use_url=False, import_id=None, mosaic=False):
+    def upload_files(self, files, use_url=False, import_id=None, mosaic=False, **opts):
         """Upload the provided files. If a mosaic, compute a name from the
         provided files.
         :param files: the files to upload
@@ -88,7 +88,7 @@ class Client(object):
             layername = os.path.basename(files[0])
             name, _ = os.path.splitext(layername)
         session = self.start_import(import_id, mosaic=mosaic, name=name)
-        session.upload_task(files, use_url)
+        session.upload_task(files, use_url, **opts)
         
         return session
 
