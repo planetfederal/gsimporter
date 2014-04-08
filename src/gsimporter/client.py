@@ -57,7 +57,8 @@ class Client(object):
         if import_id: assert session.id >= import_id
         return session
         
-    def upload(self, fpath, use_url=False, import_id=None, mosaic=False):
+    def upload(self, fpath, use_url=False, import_id=None, mosaic=False,
+               initial_opts=None):
         """Try a complete import - create a session and upload the provided file.
         fpath can be a path to a zip file or the 'main' file if a shapefile or
         a tiff.
@@ -65,21 +66,24 @@ class Client(object):
         :param use_url: if True, tell the importer where to find the file
         :param import_id: if provided, use as the specified id
         :param mosaic: if True, indicates a mosaic upload
+        :param initial_opts: default None, dict of initial import options
         :returns: a gsimporter.api.Session object
         """
         files = [ fpath ]
         if fpath.lower().endswith(".shp"):
             files = _util.shp_files(fpath)
 
-        return self.upload_files(files, use_url, import_id, mosaic)
+        return self.upload_files(files, use_url, import_id, mosaic, initial_opts)
 
-    def upload_files(self, files, use_url=False, import_id=None, mosaic=False):
+    def upload_files(self, files, use_url=False, import_id=None, mosaic=False,
+                     intial_opts=None):
         """Upload the provided files. If a mosaic, compute a name from the
         provided files.
         :param files: the files to upload
         :param use_url: if True, tell the importer where to find the file
         :param import_id: if provided, use as the specified id
         :param mosaic: if True, indicates a mosaic upload
+        :param initial_opts: default None, dict of initial import options
         :returns: a gsimporter.api.Session object
         """
         name = None
@@ -88,7 +92,7 @@ class Client(object):
             layername = os.path.basename(files[0])
             name, _ = os.path.splitext(layername)
         session = self.start_import(import_id, mosaic=mosaic, name=name)
-        session.upload_task(files, use_url)
+        session.upload_task(files, use_url, intial_opts)
         
         return session
 

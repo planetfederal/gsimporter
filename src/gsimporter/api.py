@@ -242,7 +242,8 @@ class Task(_UploadBase):
         _binding('progress'),
         _binding('updateMode', expected=False), # workaround for older versions
         _binding('data', binding=Data),
-        _binding('target', binding=Target),
+        # a missing target implies the source must be imported into db
+        _binding('target', binding=Target, expected=False),
         # a missing layer probably indicates an undetected format
         _binding('layer', binding=Layer, expected=False),
     )
@@ -348,7 +349,7 @@ class Session(_UploadBase):
                 t.delete()
                 self.tasks.remove(t)
 
-    def upload_task(self, files, use_url=False):
+    def upload_task(self, files, use_url=False, initial_opts=None):
         """create a task with the provided files
         files - collection of files to upload or zip file
         use_url - if true, post a URL to the uploader
@@ -357,6 +358,12 @@ class Session(_UploadBase):
         # neglects to retreive the overall session status field
         fname = os.path.basename(files[0])
         _,ext = os.path.splitext(fname)
+        def addopts(base):
+            if initial_opts:
+                # pass options in as value:key parameters, this allows multiple
+                # options per key
+                base = base + '&' + '&'.join(['option=%s:%s' % (v,k) for k,v in initial_opts.iteritems()])
+            return base
         if use_url:
             if ext == '.zip':
                 upload_url = files[0]
@@ -367,10 +374,10 @@ class Session(_UploadBase):
             resp = self._client().post_upload_url(url, upload_url)
         elif ext == '.zip':
             url = self._url("imports/%s/tasks/%s?expand=3" % (self.id, fname))
-            resp = self._client().put_zip(url, files[0])
+            resp = self._client().put_zip(addopts(url), files[0])
         else:
             url = self._url("imports/%s/tasks?expand=3" % self.id)
-            resp = self._client().post_multipart(url, files)
+            resp = self._client().post_multipart(addopts(url), files)
         tasks = parse_response( resp )
         if not isinstance(tasks, list):
             tasks = [tasks]
