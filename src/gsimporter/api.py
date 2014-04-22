@@ -36,6 +36,7 @@ def parse_response(args, parent=None):
     '''
     headers, response = args
     try:
+        print (str(response))
         resp = json.loads(response)
     except ValueError,ex:
         _logger.warn('invalid JSON response: %s',response)
@@ -67,7 +68,8 @@ class _UploadBase(object):
         self._parent = parent
         if parent == self:
             raise Exception('bogus')
-        self._bind_json(json)
+        if json is not None:
+            self._bind_json(json)
         self._vals = {}
         self._uploader = None
 
@@ -153,21 +155,33 @@ class Data(_UploadBase):
         # either file or files...
         _binding('file', expected=False),
         _binding('files', expected=False),
+        # location is used instead of file for remote uploads
+        # e.g.:
+        #   "data": {
+        #       "type": "remote",
+        #       "location": "ftp://myserver/data/bc_shapefiles",
+        #       "username": "dan",
+        #       "password": "secret"
+        #   }
+        _binding('location', expected=False),
+        _binding('username', expected=False),
+        _binding('password', expected=False),
     )
 
 
 class Target(_UploadBase):
     '''This is basically a StoreInfo'''
+    _store_types = ('dataStore', 'coverageStore', 'store')
     _object_name = 'target'
     _bindings = (
         _binding('name'),
         _binding('type'),
-        _binding('enabled'),
+        _binding('enabled', expected=False),
     )
 
     def _bind_json(self, json):
         self.href = json.get('href')
-        store_type = [ k for k in ('dataStore', 'coverageStore', 'store') if k in json]
+        store_type = [ k for k in Target._store_types  if k in json]
         if len(store_type) != 1:
             self.binding_failed('invalid store entry: %s', json.keys())
         self.store_type = store_type[0]
@@ -260,7 +274,15 @@ class Task(_UploadBase):
         return '%s:%s' % (self.target.workspace_name, self.layer.name)
 
     # Mutators
-    def set_target(self, store_name=None, workspace=None):
+    def set_target(self, store_name=None, workspace=None, store_type=None):
+        if self.target is None:
+            if workspace is None:
+                raise Exception("workspace required if target is not set")
+            if store_type not in Target._store_types:
+                raise Exception("store_type must be one of %s" % (Target._store_types,))
+            self.target = Target(None, self)
+            self.target.store_type = store_type
+            self.target.href = self.href + "/target"
         self.target.change_datastore(store_name, workspace)
 
     def set_update_mode(self,update_mode):
@@ -337,8 +359,11 @@ class Session(_UploadBase):
         _binding("id"),
         _binding("href"),
         _binding("state"),
+        _binding("data", binding=Data, expected=False),
         _binding("archive", expected=False, ro=False),
         _binding("tasks", expected=False, binding=Task),
+        _binding("targetWorkspace", expected=False, binding=Target),
+        _binding("targetStore", expected=False, binding=Target),
     )
 
     def delete_unrecognized_tasks(self):
@@ -390,7 +415,7 @@ class Session(_UploadBase):
         #@todo check task status if we don't have it already?
         url = self._url("imports/%s",self.id)
         if async:
-            url = url + "?async"
+            url = url + "?async=true&exec=true"
         resp, content = self._client().post(url)
         if resp['status'] != '204':
             raise Exception("expected 204 response code, got %s" % resp['status'],content)
