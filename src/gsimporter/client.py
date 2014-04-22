@@ -153,8 +153,11 @@ class _Client(object):
         return resp['errors']
     
     def _request(self, url, method="GET", data=None, headers={}):
-        _logger.info("%s request to %s:\n%s",method,url,data)
-        resp, content = self.http.request(url,method,data,headers)
+        log_data = None
+        if data:
+            log_data = data if len(data) < 1024 else "[Data to long...]"
+        _logger.info("%s request to %s:\n[Data]:%s", method, url, log_data)
+        resp, content = self.http.request(url, method, data, headers)
         _debug(resp, content)
         if resp.status == 404:
             raise NotFound()

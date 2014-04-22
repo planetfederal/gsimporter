@@ -67,7 +67,8 @@ class _UploadBase(object):
         self._parent = parent
         if parent == self:
             raise Exception('bogus')
-        self._bind_json(json)
+        if json is not None:
+            self._bind_json(json)
         self._vals = {}
         self._uploader = None
 
@@ -158,6 +159,7 @@ class Data(_UploadBase):
 
 class Target(_UploadBase):
     '''This is basically a StoreInfo'''
+    _store_types = ('dataStore', 'coverageStore', 'store')
     _object_name = 'target'
     _bindings = (
         _binding('name'),
@@ -167,7 +169,7 @@ class Target(_UploadBase):
 
     def _bind_json(self, json):
         self.href = json.get('href')
-        store_type = [ k for k in ('dataStore', 'coverageStore', 'store') if k in json]
+        store_type = [ k for k in Target._store_types  if k in json]
         if len(store_type) != 1:
             self.binding_failed('invalid store entry: %s', json.keys())
         self.store_type = store_type[0]
@@ -260,7 +262,15 @@ class Task(_UploadBase):
         return '%s:%s' % (self.target.workspace_name, self.layer.name)
 
     # Mutators
-    def set_target(self, store_name=None, workspace=None):
+    def set_target(self, store_name=None, workspace=None, store_type=None):
+        if self.target is None:
+            if workspace is None:
+                raise Exception("workspace required if target is not set")
+            if store_type not in Target._store_types:
+                raise Exception("store_type must be one of %s" % (Target._store_types,))
+            self.target = Target(None, self)
+            self.target.store_type = store_type
+            self.target.href = self.href + "/target"
         self.target.change_datastore(store_name, workspace)
 
     def set_update_mode(self,update_mode):
