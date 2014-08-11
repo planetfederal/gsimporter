@@ -233,7 +233,7 @@ class _Client(object):
             key = fpair[0]
             if len(fpair) == 2:
                 filename = os.path.basename(fpair[1])
-                fp = open(fpair[1])
+                fp = open(fpair[1], 'rb')
                 value = fp.read()
                 fp.close()
             else:
