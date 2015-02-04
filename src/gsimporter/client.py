@@ -240,7 +240,7 @@ class _Client(object):
                 filename, value = fpair[1:]
             L.append('--' + BOUNDARY)
             L.append('Content-Disposition: form-data; name="%s"; filename="%s"' % (str(key), str(filename)))
-            L.append('Content-Type: %s' % _get_content_type(filename))
+            L.append('Content-Type: %s' % str(_get_content_type(filename)))
             L.append('')
             L.append(value)
         L.append('--' + BOUNDARY + '--')
