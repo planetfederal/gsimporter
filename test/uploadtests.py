@@ -44,9 +44,7 @@ PREPARATION FOR THE TESTS
 2) Lunch a local instance of GeoServer on 8080 port
 3) Run the uploadtests
 
-   from gsimporter/test
-
-   $ python uploadtests.py
+   $ GEOSERVER_BASE_URL=http://localhost:8080/ python setup.py test
 
 """
 
@@ -445,6 +443,7 @@ class SingleImportTests(unittest.TestCase):
         self.assertTrue(layer_name == layer_updated_name,
                         msg='Expected layer "%s" to be updated' % layer_name)
 
+    @unittest.skip('See GeoServer JIRA 7207')
     def test_csv(self):
         data = (
             ['lat', 'lon', 'date'],

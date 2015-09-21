@@ -36,7 +36,6 @@ def parse_response(args, parent=None):
     '''
     headers, response = args
     try:
-        print (str(response))
         resp = json.loads(response)
     except ValueError,ex:
         _logger.warn('invalid JSON response: %s',response)
