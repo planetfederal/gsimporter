@@ -24,7 +24,7 @@ import socket
 import tempfile
 import time
 import traceback
-import unittest
+import unittest2 as unittest
 
 """
 PREPARATION FOR THE TESTS

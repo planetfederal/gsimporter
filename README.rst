@@ -1,6 +1,9 @@
 gsimporter
 ==========
 
+.. image:: https://travis-ci.org/boundlessgeo/gsimporter.svg?branch=master
+    :target: https://travis-ci.org/boundlessgeo/gsimporter
+
 gsimporter is a python library for using GeoServer's importer API.
 
 Installing
