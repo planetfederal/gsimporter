@@ -55,3 +55,4 @@ notifications:
 branches:
   only:
     - master
+    - travis-ci
