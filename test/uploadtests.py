@@ -26,6 +26,29 @@ import time
 import traceback
 import unittest
 
+"""
+PREPARATION FOR THE TESTS
+=========================
+
+1) Create the Postgis user and DB
+
+    $ sudo su - postgres
+    $ createuser -P importer
+      pw: importer
+    $ createdb -O importer importer_test
+    $ psql -c "ALTER USER importer WITH SUPERUSER;"
+    $ psql -d importer_test -c "create extension postgis;"
+    $ psql -d importer_test -c "grant all on spatial_ref_sys to public;"
+    $ psql -d importer_test -c "grant all on geometry_columns to public;"
+
+2) Lunch a local instance of GeoServer on 8080 port
+3) Run the uploadtests
+
+   $ GEOSERVER_BASE_URL=http://localhost:8080/ python setup.py test
+
+"""
+
+
 # Setup config
 hasflag = lambda f: f in sys.argv and (sys.argv.remove(f) or True)
 GEOSERVER_BASE_URL = os.getenv('GEOSERVER_BASE_URL', 'http://localhost:8080')
@@ -34,15 +57,15 @@ WORKSPACE = 'importer'
 WORKSPACE2 = 'importer2'
 SKIP_TEARDOWN = hasflag('--skip-teardown')
 DB_CONFIG = dict(
-    DB_DATASTORE_DATABASE = 'importer_test',
-    DB_DATASTORE_NAME = 'importer_test',
-    DB_DATASTORE_USER = 'importer',
-    DB_DATASTORE_PASSWORD = 'importer',
-    DB_DATASTORE_HOST = 'localhost',
-    DB_DATASTORE_PORT = '5432',
-    DB_DATASTORE_TYPE = 'postgis',
+    DB_DATASTORE_DATABASE='importer_test',
+    DB_DATASTORE_NAME='importer_test',
+    DB_DATASTORE_USER='importer',
+    DB_DATASTORE_PASSWORD='importer',
+    DB_DATASTORE_HOST='localhost',
+    DB_DATASTORE_PORT='5432',
+    DB_DATASTORE_TYPE='postgis',
 )
-DB_CONFIG.update([ (k,os.getenv(k)) for k in DB_CONFIG if k in os.environ])
+DB_CONFIG.update([(k, os.getenv(k)) for k in DB_CONFIG if k in os.environ])
 # make this global
 DB_DATASTORE_NAME = DB_CONFIG['DB_DATASTORE_NAME']
 client = None
@@ -58,7 +81,8 @@ def open_db_datastore_connection():
         ('port', 'DB_DATASTORE_PORT'),
         ('host', 'DB_DATASTORE_HOST'),
     ]
-    return psycopg2.connect(' '.join([ "%s='%s'" % (k, DB_CONFIG[v]) for k,v in params ]))
+    return psycopg2.connect(' '.join(
+        ["%s='%s'" % (k, DB_CONFIG[v]) for k, v in params]))
 try:
     conn = open_db_datastore_connection()
 except:
@@ -71,7 +95,7 @@ except:
 def drop_table(name):
     cursor = conn.cursor()
     try:
-        cursor.execute("SELECT DropGeometryTable ('%s')" %  name)
+        cursor.execute("SELECT DropGeometryTable ('%s')" % name)
     except:
         pass
     conn.commit()
@@ -97,7 +121,11 @@ def bad_file(name):
 
 def get_wms(name):
     url = '%s/geoserver/wms' % GEOSERVER_BASE_URL
-    return wms.WebMapService(url)[name]
+    get_capa = wms.WebMapService(url)
+    if len(list(get_capa.contents)) > 0:
+        return get_capa[name]
+    else:
+        return None
 
 
 @contextlib.contextmanager
@@ -145,21 +173,25 @@ class BaseClientTest(unittest.TestCase):
     def test_transforms(self):
         # just verify client functionality - does it manage them properly
         # at some point, the server might add validation of fields...
-        session = client.upload(vector_file('san_andres_y_providencia_poi.shp'))
+        session = client.upload(
+            vector_file('san_andres_y_providencia_poi.shp'))
         task, = session.tasks
-        att_transform = lambda f,t='AttributeRemapTransform': {'type': t,
-                                   'field': f,
-                                   'target':'java.lang.Integer'}
+        att_transform = lambda f, t='AttributeRemapTransform': {
+            'type': t,
+            'field': f,
+            'target': 'java.lang.Integer'
+        }
+
         t1 = att_transform('foo')
         t2 = att_transform('bar')
         t3 = att_transform('baz')
-        
 
         # this is just to strip off the href :(
         compare_dict = lambda d1, d2: \
-                       all([ d1[k] == d2[k] for k in d1 if k != 'href'])
+            all([d1[k] == d2[k] for k in d1 if k != 'href'])
         compare_list = lambda l1, l2: len(l1) == len(l2) and \
-                       all([ compare_dict(*a) for a in zip(l1,l2)])
+            all([compare_dict(*a) for a in zip(l1, l2)])
+
         def t(func, transforms, expect, **kwargs):
             task = func.__self__
             func(transforms, **kwargs)
@@ -168,12 +200,12 @@ class BaseClientTest(unittest.TestCase):
             self.assertTrue(compare_list(expect, task.transforms))
 
         t(task.set_transforms, [t1], [t1])
-        t(task.set_transforms, [t1,t2], [t1,t2])
-        t(task.add_transforms, [t3], [t1,t2,t3])
-        t(task.remove_transforms, ['baz'], [t1,t2], by_field='field')
+        t(task.set_transforms, [t1, t2], [t1, t2])
+        t(task.add_transforms, [t3], [t1, t2, t3])
+        t(task.remove_transforms, ['baz'], [t1, t2], by_field='field')
 
         try:
-            task.set_transforms([att_transform(f='f',t='Error')])
+            task.set_transforms([att_transform(f='f', t='Error')])
             self.fail('expected BadRequest')
         except BadRequest, br:
             self.assertEqual("Invalid transform type 'Error'", str(br))
@@ -187,23 +219,30 @@ class SingleImportTests(unittest.TestCase):
         self.expected_layer = None
 
     def tearDown(self):
-        if SKIP_TEARDOWN: return
-        if not self.expected_layer: return
+        if SKIP_TEARDOWN:
+            return
+        if not self.expected_layer:
+            return
         lyr = gscat.get_layer(self.expected_layer)
-        lyr and gscat.delete(lyr)
-        gscat.delete(lyr.resource)
-        if self.drop_table:
-            drop_table(self.drop_table)
-        
+        try:
+            lyr and gscat.delete(lyr) and gscat.delete(lyr.resource)
+
+            if self.drop_table:
+                drop_table(self.drop_table)
+        except:
+            pass
+
     def run_single_upload(self, vector=None, raster=None, target_store=None,
-            delete_existing=True, async=False, mosaic=False, update_mode=None,
-            change_layer_name=None, expected_srs='', target_srs=None,
-            expect_session_state='COMPLETE', expected_layer=None, workspace=None,
-            transforms=None, expected_atts=None):
+                          delete_existing=True, async=False, mosaic=False,
+                          update_mode=None, change_layer_name=None,
+                          expected_srs='', target_srs=None,
+                          expect_session_state='COMPLETE',
+                          expected_layer=None, workspace=None,
+                          transforms=None, expected_atts=None):
 
         assert vector or raster
         file_func = raster_file if raster else vector_file
-        file_name, = filter(None, [vector,raster])
+        file_name, = filter(None, [vector, raster])
         layer_name, ext = os.path.basename(file_name).rsplit('.', 1)
         file_name = file_func(file_name)
         if expected_layer is None:
@@ -221,7 +260,9 @@ class SingleImportTests(unittest.TestCase):
         session = client.upload(file_name, mosaic=mosaic)
         self.assertEqual(1, len(session.tasks))
         self.assertEqual('PENDING', session.state)
-        self.assertEqual(expected_layer, session.tasks[0].get_target_layer_name())
+        if update_mode != 'APPEND':
+            self.assertEqual(expected_layer,
+                             session.tasks[0].get_target_layer_name())
         if expected_srs is None:
             self.assertEqual('NO_CRS', session.tasks[0].state)
         elif expected_srs:
@@ -245,22 +286,25 @@ class SingleImportTests(unittest.TestCase):
             if target_store:
                 self.assertEqual(session.tasks[0].target.name, target_store)
             if workspace:
-                self.assertEqual(session.tasks[0].target.workspace_name, workspace)
+                self.assertEqual(session.tasks[0].target.workspace_name,
+                                 workspace)
             if vector:
                 self.drop_table = layer_name
-            expected_layer = '%s:%s' % (workspace or WORKSPACE, layer_name)
+            if not target_store:
+                expected_layer = '%s:%s' % (workspace or WORKSPACE, layer_name)
 
         if update_mode:
             session.tasks[0].set_update_mode(update_mode)
 
         # run import and poll if required
-        session.commit(async=False)
+        session.commit(async=async)
         self.expected_layer = expected_layer
         if async:
             while True:
                 time.sleep(.1)
                 progress = session.tasks[0].get_progress()
-                if progress['state'] == 'COMPLETE': break
+                if progress['state'] == 'COMPLETE':
+                    break
                 if progress['state'] != 'RUNNING':
                     self.fail('expected async progress state to be RUNNING')
 
@@ -269,9 +313,10 @@ class SingleImportTests(unittest.TestCase):
         self.assertEqual(expect_session_state, session.state)
         lyr = gscat.get_layer(expected_layer)
         self.assertTrue(lyr is not None,
-                        msg='Expected to find layer "%s" in the catalog' % expected_layer)
+                        msg='Expected to find layer "%s" in the catalog' %
+                        expected_layer)
         if expected_atts:
-            #@todo cannot check type via gsconfig, only names
+            # @todo cannot check type via gsconfig, only names
             names = set(lyr.resource.attributes)
             self.assertTrue(names.issuperset(expected_atts.keys()))
         return expected_layer
@@ -281,52 +326,58 @@ class SingleImportTests(unittest.TestCase):
 
     def test_single_shapefile_change_workspace(self):
         self.run_single_upload(vector='san_andres_y_providencia_poi.shp',
-            workspace=WORKSPACE2)
+                               workspace=WORKSPACE2)
 
     def test_single_raster_upload(self):
         self.run_single_upload(raster='relief_san_andres.tif')
 
     def test_single_raster_upload_change_workspace(self):
         self.run_single_upload(raster='relief_san_andres.tif',
-            workspace=WORKSPACE2)
+                               workspace=WORKSPACE2)
 
     def test_upload_to_db(self):
         self.run_single_upload(vector='san_andres_y_providencia_poi.shp',
-            target_store=DB_DATASTORE_NAME)
+                               target_store=DB_DATASTORE_NAME)
 
     @unittest.skip('Currently not handled on server')
     def test_upload_to_db_w_layer_name(self):
         self.run_single_upload(vector='san_andres_y_providencia_poi.shp',
-            target_store=DB_DATASTORE_NAME, change_layer_name='my_layer')
+                               target_store=DB_DATASTORE_NAME,
+                               change_layer_name='my_layer')
 
     def test_upload_to_db_append(self):
         self.run_single_upload(vector='san_andres_y_providencia_poi.shp',
-            target_store=DB_DATASTORE_NAME)
+                               target_store=DB_DATASTORE_NAME)
         count = count_table('san_andres_y_providencia_poi')
         self.run_single_upload(vector='san_andres_y_providencia_poi.shp',
-            target_store=DB_DATASTORE_NAME, update_mode='APPEND')
-        self.assertEqual(count * 2, count_table('san_andres_y_providencia_poi'))
+                               target_store=DB_DATASTORE_NAME,
+                               update_mode='APPEND')
+        self.assertEqual(count * 2,
+                         count_table('san_andres_y_providencia_poi'))
 
     def test_upload_to_db_replace(self):
         self.run_single_upload(vector='san_andres_y_providencia_poi.shp',
-            target_store=DB_DATASTORE_NAME)
+                               target_store=DB_DATASTORE_NAME)
         count = count_table('san_andres_y_providencia_poi')
         self.run_single_upload(vector='san_andres_y_providencia_poi.shp',
-            target_store=DB_DATASTORE_NAME, update_mode='REPLACE')
+                               target_store=DB_DATASTORE_NAME,
+                               update_mode='REPLACE')
         self.assertEqual(count, count_table('san_andres_y_providencia_poi'))
 
     def test_upload_to_db_async(self):
         self.run_single_upload(vector='san_andres_y_providencia_highway.shp',
-            target_store=DB_DATASTORE_NAME, async=True)
+                               target_store=DB_DATASTORE_NAME, async=True)
 
     def test_upload_with_bad_files(self):
-        shp_files = _util.shp_files(vector_file('san_andres_y_providencia_poi.shp'))
+        shp_files = _util.shp_files(vector_file(
+                                    'san_andres_y_providencia_poi.shp'))
         _, junk = tempfile.mkstemp(suffix='.junk')
         try:
             shp_files.append(junk)
             zip_file = _util.create_zip(shp_files)
+            ly_name = 'importer:san_andres_y_providencia_poi'
             self.run_single_upload(vector=zip_file,
-                expected_layer='importer:san_andres_y_providencia_poi')
+                                   expected_layer=ly_name)
         finally:
             os.unlink(junk)
             os.unlink(zip_file)
@@ -336,32 +387,79 @@ class SingleImportTests(unittest.TestCase):
         src = raster_file('relief_san_andres.tif')
         fmt = 'relief_san_andres_%s.tif'
         paths = []
-        for year in range(2000,2010):
+        for year in range(2000, 2010):
             path = os.path.join(tmpdir, fmt % year)
             shutil.copy(src, path)
             paths.append(path)
         zip_file = _util.create_zip(paths)
         try:
             layer_name = self.run_single_upload(raster=zip_file, mosaic=True)
+            # Avoid Layer DELETE on tearDown
+            self.expected_layer = None
         finally:
             os.unlink(zip_file)
-        wms = get_wms(layer_name)
+
+        lyr = gscat.get_layer(layer_name)
+        self.assertTrue(lyr is not None,
+                        msg='Expected to find layer "%s" in the catalog' %
+                        layer_name)
+
+        with self.assertRaises(ValueError):
+            # Importer creates a Style without Title
+            get_wms(layer_name)
+
+    def test_mosaic_granule_update(self):
+        tmpdir = tempfile.mkdtemp()
+        src = raster_file('relief_san_andres.tif')
+        fmt = 'relief_san_andres_%s.tif'
+        paths = []
+        for year in range(2000, 2010):
+            path = os.path.join(tmpdir, fmt % year)
+            shutil.copy(src, path)
+            paths.append(path)
+        zip_file = _util.create_zip(paths)
+        try:
+            layer_name = self.run_single_upload(raster=zip_file, mosaic=True)
+            # Avoid Layer DELETE on tearDown
+            self.expected_layer = None
+        finally:
+            os.unlink(zip_file)
+
+        lyr = gscat.get_layer(layer_name)
+        self.assertTrue(lyr is not None,
+                        msg='Expected to find layer "%s" in the catalog' %
+                        layer_name)
+
+        # Add a new granule to the existing mosaic
+        path = os.path.join(tmpdir, fmt % 2011)
+        shutil.copy(src, path)
+        workspace = layer_name.split(":")[0]
+        target_store = layer_name.split(":")[1]
+        layer_updated_name = self.run_single_upload(raster=path,
+                                                    mosaic=True,
+                                                    workspace=workspace,
+                                                    target_store=target_store,
+                                                    update_mode='APPEND',
+                                                    expected_layer=layer_name)
+
+        self.assertTrue(layer_name == layer_updated_name,
+                        msg='Expected layer "%s" to be updated' % layer_name)
 
     def test_csv(self):
         data = (
-            ['lat','lon','date'],
-            [1    ,5    ,'2001'],
-            [2    ,5    ,'2002'],
-            [3    ,5    ,'2003'],
-            [4    ,5    ,'2004'],
-            [5    ,5    ,'2005'],
+            ['lat', 'lon', 'date'],
+            [1, 5, '2001'],
+            [2, 5, '2002'],
+            [3, 5, '2003'],
+            [4, 5, '2004'],
+            [5, 5, '2005'],
         )
         transforms = [{
             'type': 'AttributesToPointGeometryTransform',
             'latField': 'lat',
             'lngField': 'lon',
         }]
-        atts = { 'location':'Point', 'date':'Integer'}
+        atts = {'location': 'Point', 'date': 'Integer'}
         with csv_file(data) as f:
             self.run_single_upload(vector=f, expected_srs=None,
                                    target_srs='EPSG:4326',
@@ -380,7 +478,9 @@ class ErrorTests(unittest.TestCase):
         self.assertEqual(None, task.layer)
 
     def test_invalid_target(self):
-        session = client.upload(vector_file('san_andres_y_providencia_poi.shp'))
+        ly_name = 'san_andres_y_providencia_poi.shp'
+        session = client.upload(vector_file(ly_name))
+
         try:
             session.tasks[0].target.change_datastore('foobar')
             self.fail('Expected BadRequest')
@@ -399,7 +499,7 @@ gscat = catalog.Catalog(GEOSERVER_REST_URL)
 try:
     sessions = client.get_sessions()
     print 'successfully listed imports...',
-    ids = [ s.id for s in sessions ]
+    ids = [s.id for s in sessions]
     gscat.get_layers()
     print 'successfully listed layers...'
 except socket.error, ex:
@@ -425,8 +525,10 @@ if '--clean' in sys.argv:
 
 # Preflight workspace setup
 print 'checking for test workspaces...',
+
+
 def create_ws(name):
-    if not any([ ws for ws in gscat.get_workspaces() if ws.name == name]):
+    if not any([ws for ws in gscat.get_workspaces() if ws.name == name]):
         print 'creating workspace "%s"...' % name,
         gscat.create_workspace(name, 'http://geoserver.org/%s' % name)
 create_ws(WORKSPACE)
@@ -435,14 +537,17 @@ print 'done'
 print 'setting default workspace to %s...' % WORKSPACE,
 # @todo - put this into gsconfig and remove
 xml = "<workspace><name>%s</name></workspace>" % WORKSPACE
-headers = { "Content-Type": "application/xml" }
+headers = {"Content-Type": "application/xml"}
 workspace_url = gscat.service_url + "/workspaces/default.xml"
 headers, response = gscat.http.request(workspace_url, "PUT", xml, headers)
-assert 200 == headers.status, "Tried to change default workspace but got " + str(headers.status) + ": " + response
+msg = "Tried to change default workspace but got "
+assert 200 == headers.status, msg + str(headers.status) + ": " + response
 print 'done'
 
 # Preflight DB setup
 print 'checking for test DB target datastore...',
+
+
 def validate_datastore(ds):
     # force a reload to validate the datastore :(
     gscat.http.request('%s/reload' % gscat.service_url, 'POST')
@@ -450,6 +555,8 @@ def validate_datastore(ds):
         print 'FAIL! Check your datastore settings, the store is not enabled:'
         pprint(DB_CONFIG)
         sys.exit(1)
+
+
 def create_db_datastore(settings):
     # get or create datastore
     try:
@@ -474,7 +581,6 @@ def create_db_datastore(settings):
 create_db_datastore(DB_CONFIG)
 print 'done'
 print
-
 
 if __name__ == '__main__':
     unittest.main()

@@ -46,14 +46,15 @@ class Client(object):
         '''
         return self._call(self.client.get_import,id)
 
-    def start_import(self, import_id=None, mosaic=False, name=None):
+    def start_import(self, import_id=None, mosaic=False, name=None, target_store=None):
         """Create a new import session.
         :param import_id: optional id to specify
         :param mosaic: if True, indicates a mosaic upload
         :param name: if provided, name the mosaic upload
+        :param target_store: if provided, name of an existing store to be updated
         :returns: a gsimporter.api.Session object
         """
-        session = self._call(self.client.start_import, import_id, mosaic, name)
+        session = self._call(self.client.start_import, import_id, mosaic, name, target_store)
         if import_id: assert session.id >= import_id
         return session
         
@@ -76,7 +77,7 @@ class Client(object):
         return self.upload_files(files, use_url, import_id, mosaic, initial_opts)
 
     def upload_files(self, files, use_url=False, import_id=None, mosaic=False,
-                     intial_opts=None):
+                     intial_opts=None, target_store=None):
         """Upload the provided files. If a mosaic, compute a name from the
         provided files.
         :param files: the files to upload
@@ -91,7 +92,10 @@ class Client(object):
             # @hack - ensure that target layer gets a nice name
             layername = os.path.basename(files[0])
             name, _ = os.path.splitext(layername)
-        session = self.start_import(import_id, mosaic=mosaic, name=name)
+        if target_store:
+            name = os.path.abspath(files[0])
+
+        session = self.start_import(import_id, mosaic=mosaic, name=name, target_store=target_store)
         session.upload_task(files, use_url, intial_opts)
         
         return session
@@ -155,7 +159,11 @@ class _Client(object):
     def _request(self, url, method="GET", data=None, headers={}):
         log_data = None
         if data:
-            log_data = data if len(data) < 1024 else "[Data to long...]"
+            try:
+                data_len = len(data)
+            except:
+                data_len = -1
+            log_data = data if data_len < 1024 else "[Data to long...]"
         _logger.info("%s request to %s:\n[Data]:%s", method, url, log_data)
         resp, content = self.http.request(url, method, data, headers)
         _debug(resp, content)
@@ -189,7 +197,7 @@ class _Client(object):
     def get_imports(self):
         return parse_response(self._request(self.url("imports")))
     
-    def start_import(self, import_id=None, mosaic=False, name=None):
+    def start_import(self, import_id=None, mosaic=False, name=None, target_store=False):
         method = 'POST'
         data = None
         headers = {}
@@ -200,6 +208,19 @@ class _Client(object):
                    "name": name,
                    "time": {
                         "mode": "auto"
+                   }
+                }
+            }})
+            headers["Content-type"] = "application/json"
+        if target_store:
+            data = json.dumps({"import": {
+                "data": {
+                    "type": "file",
+                    "file": name
+                },
+                "targetStore": {
+                   "dataStore": {
+                        "name": target_store
                    }
                 }
             }})

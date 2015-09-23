@@ -154,6 +154,17 @@ class Data(_UploadBase):
         # either file or files...
         _binding('file', expected=False),
         _binding('files', expected=False),
+        # location is used instead of file for remote uploads
+        # e.g.:
+        #   "data": {
+        #       "type": "remote",
+        #       "location": "ftp://myserver/data/bc_shapefiles",
+        #       "username": "dan",
+        #       "password": "secret"
+        #   }
+        _binding('location', expected=False),
+        _binding('username', expected=False),
+        _binding('password', expected=False),
     )
 
 
@@ -164,7 +175,7 @@ class Target(_UploadBase):
     _bindings = (
         _binding('name'),
         _binding('type'),
-        _binding('enabled'),
+        _binding('enabled', expected=False),
     )
 
     def _bind_json(self, json):
@@ -347,8 +358,11 @@ class Session(_UploadBase):
         _binding("id"),
         _binding("href"),
         _binding("state"),
+        _binding("data", binding=Data, expected=False),
         _binding("archive", expected=False, ro=False),
         _binding("tasks", expected=False, binding=Task),
+        _binding("targetWorkspace", expected=False, binding=Target),
+        _binding("targetStore", expected=False, binding=Target),
     )
 
     def delete_unrecognized_tasks(self):
@@ -400,7 +414,7 @@ class Session(_UploadBase):
         #@todo check task status if we don't have it already?
         url = self._url("imports/%s",self.id)
         if async:
-            url = url + "?async"
+            url = url + "?async=true&exec=true"
         resp, content = self._client().post(url)
         if resp['status'] != '204':
             raise Exception("expected 204 response code, got %s" % resp['status'],content)
