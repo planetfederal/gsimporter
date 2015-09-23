@@ -404,7 +404,9 @@ class SingleImportTests(unittest.TestCase):
                         msg='Expected to find layer "%s" in the catalog' %
                         layer_name)
 
-        get_wms(layer_name)
+        with self.assertRaises(ValueError):
+            # Importer creates a Style without Title
+            get_wms(layer_name)
 
     def test_mosaic_granule_update(self):
         tmpdir = tempfile.mkdtemp()
@@ -443,7 +445,6 @@ class SingleImportTests(unittest.TestCase):
         self.assertTrue(layer_name == layer_updated_name,
                         msg='Expected layer "%s" to be updated' % layer_name)
 
-    @unittest.skip('See GeoServer JIRA 7207')
     def test_csv(self):
         data = (
             ['lat', 'lon', 'date'],
