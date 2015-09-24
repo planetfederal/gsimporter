@@ -1,0 +1,49 @@
+language: python
+addons:
+  postgresql: "9.3"
+services:
+ - postgresql
+matrix:
+  include:
+    - python: "2.6"
+      env: GS_VERSION=2.7
+    - python: "2.7"
+      env: GS_VERSION=2.7
+
+install:
+  - sudo apt-get -qq -y update
+  - sudo apt-get install -y --force-yes openjdk-7-jdk --no-install-recommends
+  - mkdir gs
+  - pushd gs
+  - wget http://repo2.maven.org/maven2/org/mortbay/jetty/jetty-runner/8.1.8.v20121106/jetty-runner-8.1.8.v20121106.jar
+  - wget http://ares.boundlessgeo.com/geoserver/${GS_VERSION}.x/geoserver-${GS_VERSION}.x-latest-war.zip
+  - unzip geoserver-${GS_VERSION}.x-latest-war.zip
+  - unzip geoserver.war -d geoserver
+  - mkdir ext
+  - wget http://ares.boundlessgeo.com/geoserver/${GS_VERSION}.x/ext-latest/geoserver-${GS_VERSION}-SNAPSHOT-importer-plugin.zip
+  - unzip geoserver-${GS_VERSION}-SNAPSHOT-importer-plugin.zip -d ext
+  - cp ext/* geoserver/WEB-INF/lib
+  - popd
+  - pip install .
+  - pip install psycopg2
+  - pip install unittest2
+  - pip install gisdata==0.5.4
+  - pip install gsconfig==0.6.3
+  - pip install OWSLib==0.7.2
+before_script:
+  - psql -U postgres -c "create extension postgis"
+  - psql -U postgres -c "create user importer superuser login connection limit 10 encrypted password 'importer';"
+  - psql -U postgres -c "create database importer_test owner importer;"
+  - psql -U postgres -d importer_test -c "create extension postgis"
+  - java -Xmx512m -XX:MaxPermSize=256m -Dorg.eclipse.jetty.server.webapp.parentLoaderPriority=true -jar gs/jetty-runner-8.1.8.v20121106.jar --path /geoserver gs/geoserver > /dev/null 2>&1 &
+  - sleep 90
+script:
+  - python setup.py test
+notifications:
+  email:
+    on_success: never
+    on_failure: never
+branches:
+  only:
+    - master
+    - travis-ci

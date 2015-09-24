@@ -18,9 +18,10 @@ setup(name = "gsimporter",
         'gsconfig>=0.6.3',
         'psycopg2',
         'OWSLib>=0.7.2',
+        'unittest2',
     ],
     package_dir = {'':'src'},
     packages = find_packages('src'),
     test_suite = 'test.uploadtests'
-) 
+)
 
