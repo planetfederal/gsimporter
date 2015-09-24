@@ -9,12 +9,28 @@ gsimporter is a python library for using GeoServer's importer API.
 Installing
 ==========
 
-Once in pypi, put stuff here.
+pip install gsconfig
+
+or
+
+git clone https://github.com/boundlessgeo/gsimporter.git
+cd gsimporter
+pip install .
 
 Getting Help
 ============
 
-Need to host the manual. And put other details here.
+Please use the Github project at http://github.com/boundlessgeo/gsimporter for any bug reports (and pull requests are welcome, but please include tests where possible.)
+
+Issues
+=============
+
+GeoServer 2.7 + importer does not recognize CSV format
+https://osgeo-org.atlassian.net/browse/GEOS-7207
+
+Work Around:
+- Download the gt-csv-13.0.jar [GeoServer 2.7](http://download.osgeo.org/webdav/geotools/org/geotools/gt-csv/13.0/gt-csv-13.0.jar)
+- Add to GeoServer's WEB-INF/lib directory.
 
 Running Tests
 =============
