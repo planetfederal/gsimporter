@@ -3,7 +3,7 @@
 from setuptools import setup, find_packages
 
 setup(name = "gsimporter",
-    version = "0.2",
+    version = "1.0.0",
     description = "GeoServer Importer Client",
     keywords = "GeoServer Importer",
     license = "MIT",
