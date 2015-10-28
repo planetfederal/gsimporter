@@ -28,7 +28,7 @@ install:
   - pip install psycopg2
   - pip install unittest2
   - pip install gisdata==0.5.4
-  - pip install gsconfig==0.6.3
+  - pip install gsconfig==1.0.0
   - pip install OWSLib==0.7.2
 before_script:
   - psql -U postgres -c "create extension postgis"
