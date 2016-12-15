@@ -1,3 +1,7 @@
+from __future__ import print_function
+from builtins import str
+from builtins import zip
+from builtins import range
 import os
 import sys
 
@@ -87,7 +91,8 @@ try:
     conn = open_db_datastore_connection()
 except:
     traceback.print_exc()
-    print 'Error connecting to the database, check your settings'
+    # fix_print_with_import
+    print('Error connecting to the database, check your settings')
     pprint(DB_CONFIG)
     sys.exit(1)
 
@@ -207,7 +212,7 @@ class BaseClientTest(unittest.TestCase):
         try:
             task.set_transforms([att_transform(f='f', t='Error')])
             self.fail('expected BadRequest')
-        except BadRequest, br:
+        except BadRequest as br:
             self.assertEqual("Invalid transform type 'Error'", str(br))
 
 
@@ -242,7 +247,7 @@ class SingleImportTests(unittest.TestCase):
 
         assert vector or raster
         file_func = raster_file if raster else vector_file
-        file_name, = filter(None, [vector, raster])
+        file_name, = [_f for _f in [vector, raster] if _f]
         layer_name, ext = os.path.basename(file_name).rsplit('.', 1)
         file_name = file_func(file_name)
         if expected_layer is None:
@@ -256,7 +261,8 @@ class SingleImportTests(unittest.TestCase):
             drop_table(layer_name)
 
         # upload and verify state
-        print 'uploading %s' % file_name
+        # fix_print_with_import
+        print('uploading %s' % file_name)
         session = client.upload(file_name, mosaic=mosaic)
         self.assertEqual(1, len(session.tasks))
         self.assertEqual('PENDING', session.state)
@@ -318,7 +324,7 @@ class SingleImportTests(unittest.TestCase):
         if expected_atts:
             # @todo cannot check type via gsconfig, only names
             names = set(lyr.resource.attributes)
-            self.assertTrue(names.issuperset(expected_atts.keys()))
+            self.assertTrue(names.issuperset(list(expected_atts.keys())))
         return expected_layer
 
     def test_single_shapefile_upload(self):
@@ -486,57 +492,71 @@ class ErrorTests(unittest.TestCase):
         try:
             session.tasks[0].target.change_datastore('foobar')
             self.fail('Expected BadRequest')
-        except BadRequest, br:
+        except BadRequest as br:
             self.assertEqual('Unable to find referenced store', str(br))
         except:
             self.fail('Expected BadRequest')
 
 
-print 'using GEOSERVER_BASE_URL=%s' % GEOSERVER_BASE_URL
+# fix_print_with_import
+print('using GEOSERVER_BASE_URL=%s' % GEOSERVER_BASE_URL)
 
-# Preflight connection testing
-print 'testing access...',
+# Preflight connection testing# fix_print_with_import
+
+# fix_print_with_import
+print('testing access...', end=' ')
 client = Client(GEOSERVER_REST_URL)
 gscat = catalog.Catalog(GEOSERVER_REST_URL)
 try:
     sessions = client.get_sessions()
-    print 'successfully listed imports...',
+    # fix_print_with_import
+    print('successfully listed imports...', end=' ')
     ids = [s.id for s in sessions]
     gscat.get_layers()
-    print 'successfully listed layers...'
-except socket.error, ex:
-    print 'error connecting to the server, check your GEOSERVER_BASE_URL'
-    print ex
+    # fix_print_with_import
+    print('successfully listed layers...')
+except socket.error as ex:
+    # fix_print_with_import
+    print('error connecting to the server, check your GEOSERVER_BASE_URL')
+    # fix_print_with_import
+    print(ex)
     sys.exit(1)
 
 # handy while testing
 if '--clean' in sys.argv:
-    print 'cleaning'
+    # fix_print_with_import
+    print('cleaning')
     sys.argv.remove('--clean')
     for l in gscat.get_layers():
         res = l.resource
         store = res.store
         if store.workspace.name in (WORKSPACE, WORKSPACE2):
-            print 'deleting layer', l.name
+            # fix_print_with_import
+            print('deleting layer', l.name)
             gscat.delete(l)
             gscat.delete(res)
     for s in gscat.get_stores():
         if s.workspace.name in (WORKSPACE, WORKSPACE2):
-            print 'deleting store', s.name
+            # fix_print_with_import
+            print('deleting store', s.name)
             gscat.delete(s)
 
 # Preflight workspace setup
-print 'checking for test workspaces...',
+# fix_print_with_import
+print('checking for test workspaces...', end=' ')
 
 
 def create_ws(name):
     if not any([ws for ws in gscat.get_workspaces() if ws.name == name]):
-        print 'creating workspace "%s"...' % name,
+        # fix_print_with_import
+        print('creating workspace "%s"...' % name, end=' ')
         gscat.create_workspace(name, 'http://geoserver.org/%s' % name)
 create_ws(WORKSPACE)
 create_ws(WORKSPACE2)
-print 'done'
-print 'setting default workspace to %s...' % WORKSPACE,
+# fix_print_with_import
+print('done')
+# fix_print_with_import
+print('setting default workspace to %s...' % WORKSPACE, end=' ')
 # @todo - put this into gsconfig and remove
 xml = "<workspace><name>%s</name></workspace>" % WORKSPACE
 headers = {"Content-Type": "application/xml"}
@@ -544,17 +564,21 @@ workspace_url = gscat.service_url + "/workspaces/default.xml"
 headers, response = gscat.http.request(workspace_url, "PUT", xml, headers)
 msg = "Tried to change default workspace but got "
 assert 200 == headers.status, msg + str(headers.status) + ": " + response
-print 'done'
+# fix_print_with_import
+print('done')
 
-# Preflight DB setup
-print 'checking for test DB target datastore...',
+# Preflight DB setup# fix_print_with_import
+
+# fix_print_with_import
+print('checking for test DB target datastore...', end=' ')
 
 
 def validate_datastore(ds):
     # force a reload to validate the datastore :(
     gscat.http.request('%s/reload' % gscat.service_url, 'POST')
     if not ds.enabled:
-        print 'FAIL! Check your datastore settings, the store is not enabled:'
+        # fix_print_with_import
+        print('FAIL! Check your datastore settings, the store is not enabled:')
         pprint(DB_CONFIG)
         sys.exit(1)
 
@@ -567,7 +591,8 @@ def create_db_datastore(settings):
         return ds
     except catalog.FailedRequestError:
         pass
-    print 'Creating target datastore %s ...' % settings['DB_DATASTORE_NAME'],
+    # fix_print_with_import
+    print('Creating target datastore %s ...' % settings['DB_DATASTORE_NAME'], end=' ')
     ds = gscat.create_datastore(settings['DB_DATASTORE_NAME'])
     ds.connection_parameters.update(
         host=settings['DB_DATASTORE_HOST'],
@@ -581,8 +606,9 @@ def create_db_datastore(settings):
     validate_datastore(ds)
     return ds
 create_db_datastore(DB_CONFIG)
-print 'done'
-print
+# fix_print_with_import
+print('done')
+print()
 
 if __name__ == '__main__':
     unittest.main()

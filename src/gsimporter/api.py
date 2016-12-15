@@ -1,3 +1,5 @@
+from builtins import str
+from builtins import object
 import collections
 import logging
 import json
@@ -37,7 +39,7 @@ def parse_response(args, parent=None):
     headers, response = args
     try:
         resp = json.loads(response)
-    except ValueError,ex:
+    except ValueError as ex:
         _logger.warn('invalid JSON response: %s',response)
         raise ex
     if "import" in resp:
@@ -182,7 +184,7 @@ class Target(_UploadBase):
         self.href = json.get('href')
         store_type = [ k for k in Target._store_types  if k in json]
         if len(store_type) != 1:
-            self.binding_failed('invalid store entry: %s', json.keys())
+            self.binding_failed('invalid store entry: %s', list(json.keys()))
         self.store_type = store_type[0]
         repr = json[self.store_type]
         super(Target, self)._bind_json(repr)
@@ -345,7 +347,7 @@ class Task(_UploadBase):
                 if unicode_error:
                     progress['message'] += ' - it looks like an invalid character'
                 return progress
-            except ValueError,ex:
+            except ValueError as ex:
                 _logger.warn('invalid JSON response: %s',response)
                 raise RequestFailed('invalid JSON')
         else:
@@ -386,7 +388,7 @@ class Session(_UploadBase):
             if initial_opts:
                 # pass options in as value:key parameters, this allows multiple
                 # options per key
-                base = base + '&' + '&'.join(['option=%s:%s' % (v,k) for k,v in initial_opts.iteritems()])
+                base = base + '&' + '&'.join(['option=%s:%s' % (v,k) for k,v in initial_opts.items()])
             return base
         if use_url:
             if ext == '.zip':

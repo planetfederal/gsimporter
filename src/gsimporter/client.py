@@ -1,13 +1,18 @@
+from __future__ import absolute_import
+from future import standard_library
+standard_library.install_aliases()
+from builtins import str
+from builtins import object
 import httplib2
 import logging
 from gsimporter.api import parse_response
 from gsimporter.api import RequestFailed
 from gsimporter.api import BadRequest
 from gsimporter.api import NotFound
-from urlparse import urlparse
-from urllib import urlencode
+from urllib.parse import urlparse
+from urllib.parse import urlencode
 import os
-import _util
+from . import _util
 import pprint
 import json
 import mimetypes
@@ -249,7 +254,7 @@ class _Client(object):
             L.append('')
             L.append(str(value))
         for fpair in files:
-            if isinstance(fpair,basestring):
+            if isinstance(fpair,str):
                 fpair = (fpair,fpair)
             key = fpair[0]
             if len(fpair) == 2:

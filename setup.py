@@ -12,6 +12,7 @@ setup(name = "gsimporter",
     author_email = "ischneider@opengeo.org",
     install_requires = [
         'httplib2',
+        'future'
     ],
     tests_require = [
         'gisdata>=0.5.4',
